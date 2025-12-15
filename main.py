@@ -42,45 +42,60 @@ except Exception as e:
 # --- 3. Endpoint de Predicción ---
 @app.post("/predict/risk")
 async def predict_risk(applicant: CreditApplicant):
-    """
+"""
     Realiza una predicción de riesgo crediticio usando el modelo de German Credit Data.
     """
-# 3.1. Convertir el objeto Pydantic a un diccionario y luego a un DataFrame
+    # 3.1. Convertir el objeto Pydantic a un diccionario y luego a un DataFrame
     applicant_dict = applicant.model_dump()
     input_df = pd.DataFrame([applicant_dict])
 
-    # 1. Renombrar las columnas con guiones bajos a espacios para que coincidan con el .pkl
+    # ----------------------------------------------------------------------
+    # FIX: RENOMBRAR COLUMNAS Y LIMPIAR LA LISTA DE FEATURES DEL MODELO
+    # ----------------------------------------------------------------------
+
+    # 1. Renombrar las columnas de input_df (de _ a espacio) para que coincidan con el .pkl
     column_mapping = {
         'Saving_accounts': 'Saving accounts',
         'Checking_account': 'Checking account',
         'Credit_amount': 'Credit amount',
+        # Si tienes más columnas con espacios en el modelo original, añádelas aquí:
+        # Ejemplo: 'Job_Type': 'Job Type'
     }
+    # Aplicar el renombramiento
     input_df.rename(columns=column_mapping, inplace=True)
     
-    # 2. Filtrar 'original_feature_names' para eliminar 'Unnamed: 0' si está presente
-    # Si la lista original está correcta, este paso no es necesario, pero ayuda si el .pkl es defectuoso
+    # 2. Limpiar la lista de nombres de features. Eliminar el índice basura ('Unnamed: 0')
+    # Y cualquier otra feature que el JSON NO provee, pero que está en original_feature_names
+    
+    # CRÍTICO: Asegurarse de que 'Unnamed: 0' se elimina de la lista de features esperadas
     clean_feature_names = [f for f in original_feature_names if f != 'Unnamed: 0']
 
     # 3.2. Asegurar el orden de las columnas con la lista limpia
-    # ¡USAR clean_feature_names en lugar de original_feature_names!
-    input_df = input_df[clean_feature_names]
-   
+    try:
+        # Ahora el DataFrame debería contener todos los nombres de 'clean_feature_names'
+        input_df = input_df[clean_feature_names]
+    except KeyError as e:
+        # Si esto aún falla, significa que el JSON no provee una columna esperada
+        raise HTTPException(status_code=400, detail=f"Error interno de features. Faltan datos requeridos: {e}")
+
+    # ----------------------------------------------------------------------
+    # RESTO DEL CÓDIGO DE PREDICCIÓN
+    # ----------------------------------------------------------------------
+    
     # 3.3. Predecir
-    # La predicción utiliza el pipeline, que aplica OHE y luego clasifica.
-    # [:, 1] toma la probabilidad de la clase positiva (Incumplimiento = 1)
     proba = model_pipeline.predict_proba(input_df)[0][1]
 
     # 3.4. Regla de Negocio (Umbral)
     RISK_THRESHOLD = 0.50  # Umbral base (Ajustable)
-
     decision = "RECHAZADO" if proba >= RISK_THRESHOLD else "APROBADO"
 
     return {
         "status": "success",
-        "risk_score_percent": round(proba * 100, 2), # Probabilidad en porcentaje
+        "risk_score_percent": round(proba * 100, 2),
         "prediction": decision,
         "details": f"Probabilidad de incumplimiento (default) calculada: {round(proba, 4)}"
     }
+ 
 # --- 4. Endpoint de Bienvenida ---
 @app.get("/")
 async def root():

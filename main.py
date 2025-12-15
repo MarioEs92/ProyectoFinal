@@ -45,14 +45,26 @@ async def predict_risk(applicant: CreditApplicant):
     """
     Realiza una predicción de riesgo crediticio usando el modelo de German Credit Data.
     """
-
-    # 3.1. Convertir el objeto Pydantic a un diccionario y luego a un DataFrame
+# 3.1. Convertir el objeto Pydantic a un diccionario y luego a un DataFrame
     applicant_dict = applicant.model_dump()
     input_df = pd.DataFrame([applicant_dict])
 
-    # 3.2. Asegurar el orden de las columnas
-    input_df = input_df[original_feature_names]
+    # 1. Renombrar las columnas con guiones bajos a espacios para que coincidan con el .pkl
+    column_mapping = {
+        'Saving_accounts': 'Saving accounts',
+        'Checking_account': 'Checking account',
+        'Credit_amount': 'Credit amount',
+    }
+    input_df.rename(columns=column_mapping, inplace=True)
+    
+    # 2. Filtrar 'original_feature_names' para eliminar 'Unnamed: 0' si está presente
+    # Si la lista original está correcta, este paso no es necesario, pero ayuda si el .pkl es defectuoso
+    clean_feature_names = [f for f in original_feature_names if f != 'Unnamed: 0']
 
+    # 3.2. Asegurar el orden de las columnas con la lista limpia
+    # ¡USAR clean_feature_names en lugar de original_feature_names!
+    input_df = input_df[clean_feature_names]
+   
     # 3.3. Predecir
     # La predicción utiliza el pipeline, que aplica OHE y luego clasifica.
     # [:, 1] toma la probabilidad de la clase positiva (Incumplimiento = 1)

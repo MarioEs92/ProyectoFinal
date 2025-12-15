@@ -42,9 +42,6 @@ except Exception as e:
 # --- 3. Endpoint de Predicción ---
 @app.post("/predict/risk")
 async def predict_risk(applicant: CreditApplicant):
-"""
-    Realiza una predicción de riesgo crediticio usando el modelo de German Credit Data.
-    """
     # 3.1. Convertir el objeto Pydantic a un diccionario y luego a un DataFrame
     applicant_dict = applicant.model_dump()
     input_df = pd.DataFrame([applicant_dict])
@@ -77,10 +74,6 @@ async def predict_risk(applicant: CreditApplicant):
     except KeyError as e:
         # Si esto aún falla, significa que el JSON no provee una columna esperada
         raise HTTPException(status_code=400, detail=f"Error interno de features. Faltan datos requeridos: {e}")
-
-    # ----------------------------------------------------------------------
-    # RESTO DEL CÓDIGO DE PREDICCIÓN
-    # ----------------------------------------------------------------------
     
     # 3.3. Predecir
     proba = model_pipeline.predict_proba(input_df)[0][1]
